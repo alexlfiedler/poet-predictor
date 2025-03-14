@@ -2,47 +2,44 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader, random_split
 import torch
 from sklearn.model_selection import train_test_split
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 
 class PoemDataset(Dataset):
-    def __init__(self, csv_file, tokenizer, max_length=512):
-        self.data = pd.read_csv(csv_file)
+    def __init__(self, csv_path, tokenizer_name='bert-base-uncased', max_length=512):
+        self.data = pd.read_csv(csv_path)
         
         # Filter poets with at least 5 poems
-        author_counts = self.data['author'].value_counts()
+        author_counts = self.data['Author'].value_counts()
         valid_authors = author_counts[author_counts >= 5].index
-        self.data = self.data[self.data['author'].isin(valid_authors)]
+        self.data = self.data[self.data['Author'].isin(valid_authors)]
+        #self.data = self.data[self.data['Author'].isin(author_counts[author_counts >= 5].index)]
+        
+        self.poems = self.data['Content'].tolist()
+        self.authors = pd.factorize(self.data['Author'])[0]  # Encode authors as integers
 
-        self.tokenizer = tokenizer
+        # Initialize tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.max_length = max_length
 
+
     def __len__(self):
-        return len(self.data)
+        return len(self.poems)
 
     def __getitem__(self, idx):
-        poem = self.data.iloc[idx]['Content']
-        author = self.data.iloc[idx]['Author']
-
-        # Tokenization
-        encoding = self.tokenizer(
-            poem,
-            max_length=self.max_length,
-            padding='max_length',
-            truncation=True,
+        poem = self.poems[idx]
+        encoded_poem = self.tokenizer(
+            poem, 
+            padding='max_length', 
+            truncation=True, 
+            max_length=self.max_length, 
             return_tensors='pt'
         )
-
-        # Convert author to integer label
-        label = torch.tensor(self.data['author'].astype('category').cat.codes[idx])
-
-        return { 'input_ids': encoding['input_ids'].squeeze(0),
-                 'attention_mask': encoding['attention_mask'].squeeze(0),
-                 'label': label }
+        author = self.authors[idx]
+        return encoded_poem['input_ids'].squeeze(0), author
 
 
 def get_data_loaders(base_path, batch_size=32):
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    dataset = PoemDataset(base_path, tokenizer)
+    dataset = PoemDataset(base_path)
 
     train_size = int(0.6 * len(dataset))
     val_size = int(0.2 * len(dataset))
