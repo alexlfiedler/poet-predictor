@@ -35,7 +35,7 @@ class PoemDataset(Dataset):
             return_tensors='pt'
         )
         author = self.authors[idx]
-        return encoded_poem['input_ids'].squeeze().to(torch.long), torch.tensor(author, dtype=torch.long)
+        return encoded_poem['input_ids'].squeeze(0), encoded_poem['attention_mask'].squeeze(0), author
 
 
 def get_data_loaders(base_path, batch_size=32):
